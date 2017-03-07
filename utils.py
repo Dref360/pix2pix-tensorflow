@@ -8,6 +8,8 @@ import random
 import pprint
 import scipy.misc
 import numpy as np
+import cv2
+import pickle
 from time import gmtime, strftime
 
 pp = pprint.PrettyPrinter()
@@ -17,8 +19,30 @@ get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
 # -----------------------------
 # new added functions for pix2pix
 
+class PaintingDataset():
+    def __init__(self,fp):
+        self.imgs,self.cnts  = pickle.load(open(fp,'rb'))
+        self.idx = 0
+    def get(self):
+        img_a, img_b = self.imgs[self.idx],self.cnts[self.idx]
+        self.idx = (self.idx + 1) % len(self.imgs)
+        return img_a,np.tile(np.expand_dims(img_b,axis=-1),(1,1,3))
+db = PaintingDataset('/media/braf3002/22AA5D190AEF69D61/dataset/dataset.pkl')
 def load_data(image_path, flip=True, is_test=False):
-    img_A, img_B = load_image(image_path)
+    img_B, img_A = db.get()
+    # B = real, A = cnt
+    img_A, img_B = preprocess_A_and_B(img_A, img_B, flip=flip, is_test=is_test)
+
+    img_A = img_A/127.5 - 1.
+    img_B = img_B/127.5 - 1.
+
+    img_AB = np.concatenate((img_B, img_A), axis=2)
+    # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
+    return img_AB
+
+def load_data_sample(image_path, flip=True, is_test=False):
+    img_B = scipy.misc.imread(image_path)
+    img_A = np.tile(np.expand_dims(cv2.Canny(img_B,100,200),axis=-1),(1,1,3))
     img_A, img_B = preprocess_A_and_B(img_A, img_B, flip=flip, is_test=is_test)
 
     img_A = img_A/127.5 - 1.
