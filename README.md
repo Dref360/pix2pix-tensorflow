@@ -6,8 +6,10 @@ This repo is looking at the relation between the "hard" inputs (contours) and th
 To look at this relation, I'm painting an image from its contours.
 
 #output
-Example of the output : ![](examples_painting.jpg)
-Example of the input : ![example_contours.png]
+Example of the output :
+<img src="./examples_painting.jpg"/>
+Example of the input :
+<img src="./example_contours.png"/>
 #requires
 -OpenCV
 -Tensorflow 1.0
