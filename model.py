@@ -8,16 +8,13 @@ import numpy as np
 from ops import *
 from utils import *
 
-MEAN = 64.0
-STD = 32.0
-
 
 class pix2pix(object):
     def __init__(self, sess, image_size=256,
                  batch_size=1, sample_size=1, output_size=256,
                  gf_dim=64, df_dim=64, L1_lambda=100,
                  input_c_dim=3, output_c_dim=3, dataset_name='facades',
-                 checkpoint_dir=None, sample_dir=None):
+                 checkpoint_dir=None, sample_dir=None, mean=0.0, std=1.0):
         """
 
         Args:
@@ -30,6 +27,7 @@ class pix2pix(object):
             output_c_dim: (optional) Dimension of output image color. For grayscale input, set to 1. [3]
         """
         self.sess = sess
+        self.sample_dir = sample_dir
         self.is_grayscale = (input_c_dim == 1)
         self.batch_size = batch_size
         self.image_size = image_size
@@ -43,6 +41,8 @@ class pix2pix(object):
         self.output_c_dim = output_c_dim
 
         self.L1_lambda = L1_lambda
+        self.mean = mean
+        self.std = std
 
         # batch normalization : deals with poor initialization helps gradient flow
         self.d_bn1 = batch_norm(name='d_bn1')
@@ -69,15 +69,15 @@ class pix2pix(object):
         self.checkpoint_dir = checkpoint_dir
 
         inpt = tf.placeholder(tf.float32,
-                              [self.batch_size,self.image_size, self.image_size,
+                              [self.batch_size, self.image_size, self.image_size,
                                self.input_c_dim + self.output_c_dim],
                               name='real_A_and_B_images')
         self.inpt = tf.placeholder(tf.float32,
-                              [self.image_size, self.image_size,
-                               self.input_c_dim + self.output_c_dim],
-                              name='real_A_and_B_images_enqueu')
-        self.q = tf.FIFOQueue(self.batch_size + 10, tf.float32,shapes=[[self.image_size, self.image_size,
-                               self.input_c_dim + self.output_c_dim]])
+                                   [self.image_size, self.image_size,
+                                    self.input_c_dim + self.output_c_dim],
+                                   name='real_A_and_B_images_enqueu')
+        self.q = tf.FIFOQueue(self.batch_size + 10, tf.float32, shapes=[[self.image_size, self.image_size,
+                                                                         self.input_c_dim + self.output_c_dim]])
         self.enqueue_op = self.q.enqueue(self.inpt)
         self.dequeue = self.q.dequeue_many(self.batch_size)
 
@@ -125,7 +125,7 @@ class pix2pix(object):
 
     def load_random_samples(self):
         data = np.random.choice(
-            glob('/media/braf3002/22AA5D190AEF69D61/dataset/painting_sample/*.jpg'.format(self.dataset_name)),
+            glob(self.sample_dir + '/*.jpg'.format(self.dataset_name)),
             self.batch_size)
         print(data)
         sample = [load_data_sample(sample_file) for sample_file in data]
@@ -136,14 +136,31 @@ class pix2pix(object):
             sample_images = np.array(sample).astype(np.float32)
         return sample_images
 
-    def sample_model(self, sample_dir, epoch, idx):
+    def sample_model(self, epoch, idx):
         sample_images = self.load_random_samples()
         samples, d_loss, g_loss = self.sess.run(
             [self.fake_B_sample, self.d_loss, self.g_loss],
             feed_dict={self.real_data: sample_images}
         )
         save_images(samples, [self.batch_size, 1],
-                    '{}/train_{:02d}_{:04d}.png'.format(sample_dir, epoch, idx))
+                    '{}/train_{:02d}_{:04d}.png'.format(self.sample_dir, epoch, idx))
+        print("[Sample] d_loss: {:.8f}, g_loss: {:.8f}".format(d_loss, g_loss))
+
+    def sample_model_for_test(self):
+        tf.initialize_all_variables().run()
+
+        if self.load(self.checkpoint_dir):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        sample_images = self.load_random_samples()
+        samples, d_loss, g_loss = self.sess.run(
+            [self.fake_B_sample, self.d_loss, self.g_loss],
+            feed_dict={self.real_data: sample_images}
+        )
+        save_images(samples, [self.batch_size, 1],
+                    '{}/valid_{}_{}.png'.format(self.sample_dir, self.mean, self.std))
         print("[Sample] d_loss: {:.8f}, g_loss: {:.8f}".format(d_loss, g_loss))
 
     def train(self, args):
@@ -194,7 +211,7 @@ class pix2pix(object):
                          time.time() - start_time, errD_fake + errD_real, errG))
 
                 if np.mod(counter, 100) == 1:
-                    self.sample_model('/media/braf3002/22AA5D190AEF69D61/dataset/painting_sample', epoch, idx)
+                    self.sample_model(epoch, idx)
 
                 if np.mod(counter, 500) == 2:
                     self.save(args.checkpoint_dir, counter)
@@ -226,7 +243,7 @@ class pix2pix(object):
         s = self.output_size
         s2, s4, s8, s16, s32, s64, s128 = int(s / 2), int(s / 4), int(s / 8), int(s / 16), int(s / 32), int(
             s / 64), int(s / 128)
-        image1 = tf.concat(3, [image, tf.random_normal(tf.shape(image), mean=MEAN, stddev=STD)])
+        image1 = tf.concat(3, [image, tf.random_normal(tf.shape(image), mean=self.mean, stddev=self.std)])
         # image is (256 x 256 x input_c_dim)
         e1 = conv2d(image1, self.gf_dim, name='g_e1_conv')
         # e1 is (128 x 128 x self.gf_dim)
@@ -300,7 +317,7 @@ class pix2pix(object):
         s = self.output_size
         s2, s4, s8, s16, s32, s64, s128 = int(s / 2), int(s / 4), int(s / 8), int(s / 16), int(s / 32), int(
             s / 64), int(s / 128)
-        image1 = tf.concat(3, [image, tf.random_normal(tf.shape(image), mean=MEAN, stddev=STD)])
+        image1 = tf.concat(3, [image, tf.random_normal(tf.shape(image), mean=self.mean, stddev=self.std)])
         # image is (256 x 256 x input_c_dim)
         e1 = conv2d(image1, self.gf_dim, name='g_e1_conv')
         # e1 is (128 x 128 x self.gf_dim)
@@ -389,6 +406,7 @@ class pix2pix(object):
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            print("Loading :", ckpt_name)
             self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
             return True
         else:
