@@ -6,10 +6,11 @@ This repo is looking at the relation between the "hard" inputs (contours) and th
 To look at this relation, I'm painting an image from its contours. The noise is a gaussian noise.
 
 # Output
-| Output                               |  Mean | STD   |
-|--------------------------------------|-------|-------|
-| <img src="./examples_painting.jpg"/> | 64    |  32   |
-
+| Output                                    |  Mean | STD   | Output                                  |  Mean | STD   |
+|-------------------------------------------|-------|-------|-----------------------------------------|-------|-------|
+| <img src="./examples_painting.jpg"/>      | 64    |  32   |<img src="./examples_painting_16_8.png"/>|16     | 8     |
+| <img src="./examples_painting_8_4.png"/>  | 8     |  4    |<img src="./examples_painting_4_2.png"/> |4      | 2     |
+| <img src="./examples_painting_0_1.png"/>  | 0     |  1    |<img src="./examples_painting_0_0.png"/> |0      | 0     |
 Example of the input :
 <img src="./example_contours.png"/>
 # Requires
@@ -22,7 +23,7 @@ I saved the dataset in this pickle file on [Drive](https://drive.google.com/file
 Its structure is : ([painting], [contour]) where the contours are computed using Canny
 
 # TODO
-- [ ] Add example with differents seed
+- [x] Add example with differents seed
 - [ ] Use differents noise (Uniform, Perlin)
 
 ## Acknowledgments
